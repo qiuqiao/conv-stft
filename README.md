@@ -1,0 +1,3 @@
+# conv-stft
+
+使用pytorch的Conv1d和ConvTranspose1d实现的STFT与iSTFT，可以使用torch.onnx.dynamo_export导出为onnx模型，还可以在dynamic_shapes=True的情况下导出（pytorch原本的STFT无法在dynamic_shapes=True的情况下导出）。
