@@ -47,9 +47,7 @@ class ConvSTFT(nn.Module):
     def forward(self, x):
         real = self.conv_real(x)
         imag = self.conv_imag(x)
-        complex = torch.complex(real, imag)
-
-        return complex
+        return real, imag
 
 
 class ConvISTFT(nn.Module):
@@ -74,9 +72,7 @@ class ConvISTFT(nn.Module):
         self.convtrans_imag.weight.data = matrix_inverse_imag.unsqueeze(1)
         self.convtrans_imag.requires_grad_(False)
 
-    def forward(self, x):
-        real = x.real
-        imag = x.imag
+    def forward(self, real, imag):
         wav = (self.convtrans_real(real) + self.convtrans_imag(imag)) / self.scale
         return wav
 
@@ -99,8 +95,8 @@ if __name__ == "__main__":
     def test():
         wav = load_test_wav().unsqueeze(0)
         conv_stft = ConvSTFT(n_fft, hop_length)
-        stft_complex = conv_stft(wav)
-        # stft_real, stft_imag = stft_complex.real, stft_complex.imag
+        real, imag = conv_stft(wav)
+        stft_complex = torch.complex(real, imag)
         stft_mag = torch.abs(stft_complex)
         print(wav.shape, stft_mag.shape)
         plt.imshow(
@@ -121,44 +117,46 @@ if __name__ == "__main__":
         ort_session = ort.InferenceSession("model.onnx")
         input_name = ort_session.get_inputs()[0].name
         wav = load_test_wav().unsqueeze(0).numpy()
-        ort_output = ort_session.run(None, {input_name: wav})
-        print(ort_output[0])
-        ort_output_mag = np.sqrt(
-            ort_output[0][..., 0] ** 2 + ort_output[0][..., 1] ** 2
-        )
-        plt.imshow(np.log(ort_output_mag[0] + 1e-6), origin="lower", aspect="auto")
+        (output_real, output_imaj) = ort_session.run(None, {input_name: wav})
+        print(output_real.shape, output_imaj.shape)
+        output_mag = np.sqrt(output_real[0] ** 2 + output_imaj[0] ** 2)
+        plt.imshow(np.log(output_mag + 1e-6), origin="lower", aspect="auto")
         plt.show()
 
     def test_istft():
         wav = load_test_wav().unsqueeze(0)
         wav = devisable_padding(wav, hop_length)
         conv_stft = ConvSTFT(n_fft, hop_length)
-        stft_complex = conv_stft(wav)
+        (real, imag) = conv_stft(wav)
 
         istft = ConvISTFT(n_fft, hop_length)
-        wav_recon = istft(stft_complex)
+        wav_recon = istft(real, imag)
 
         torchaudio.save("recon.wav", wav_recon[0], sample_rate)
         torchaudio.save("origin.wav", wav[0], sample_rate)
 
         print(torch.abs(wav_recon - wav).mean())
 
-    # wav = load_test_wav().unsqueeze(0)
-    # wav = devisable_padding(wav, hop_length)
-    # conv_stft = ConvSTFT(n_fft, hop_length)
-    # stft_complex = conv_stft(wav)
+    def test_istft_onnx():
+        wav = load_test_wav().unsqueeze(0)
+        wav = devisable_padding(wav, hop_length)
+        conv_stft = ConvSTFT(n_fft, hop_length)
+        (real, imag) = conv_stft(wav)
 
-    # istft = ConvISTFT(n_fft, hop_length)
-    # wav_recon = istft(stft_complex)
+        istft = ConvISTFT(n_fft, hop_length)
+        wav_recon = istft(real, imag)
 
-    # export_options = torch.onnx.ExportOptions(dynamic_shapes=True)
-    # onnx_program = torch.onnx.dynamo_export(
-    #     istft, stft_complex, export_options=export_options
-    # )
-    # onnx_program.save("model_istft.onnx")
+        export_options = torch.onnx.ExportOptions(dynamic_shapes=True)
+        onnx_program = torch.onnx.dynamo_export(
+            istft, real, imag, export_options=export_options
+        )
+        onnx_program.save("model_istft.onnx")
 
-    # ort_session = ort.InferenceSession("model_istft.onnx")
-    # input_name = ort_session.get_inputs()[0].name
-    # ort_output = ort_session.run(None, {input_name: stft_complex.detach().numpy()})
+        ort_session = ort.InferenceSession("model_istft.onnx")
+        input_dict = {
+            "l_real_": real.detach().cpu().numpy(),
+            "l_imag_": imag.detach().cpu().numpy(),
+        }
+        ort_output = ort_session.run(None, input_dict)
 
-    # print(torch.abs(ort_output - wav_recon).mean())
+        print(torch.abs(torch.from_numpy(ort_output[0]) - wav_recon).mean())
