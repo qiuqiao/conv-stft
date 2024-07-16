@@ -5,10 +5,6 @@ import torch
 import torchaudio
 from torch import nn
 
-sample_rate = 16000
-hop_length = 160
-n_fft = hop_length * 3
-
 
 def get_matrix(n_fft):
     window = 0.85 * torch.hann_window(n_fft) + 0.15 * torch.hamming_window(n_fft)
@@ -88,6 +84,10 @@ def devisable_padding(x, hop_length):
 
 
 if __name__ == "__main__":
+
+    sample_rate = 16000
+    hop_length = 160
+    n_fft = hop_length * 3
 
     def load_test_wav():
         wav, sr = torchaudio.load("test.wav")
