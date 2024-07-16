@@ -42,7 +42,11 @@ class ConvSTFT(nn.Module):
         return kernel_real, kernel_imag
 
     def forward(self, x):
-        return self.conv_real(x), self.conv_imag(x)
+        real = self.conv_real(x)
+        imag = self.conv_imag(x)
+        complex = torch.complex(real, imag)
+
+        return complex
 
 
 if __name__ == "__main__":
@@ -57,8 +61,9 @@ if __name__ == "__main__":
     def test():
         wav = load_test_wav().unsqueeze(0)
         conv_stft = ConvSTFT(n_fft, hop_length)
-        stft_real, stft_imag = conv_stft(wav)
-        stft_mag = torch.sqrt(stft_real**2 + stft_imag**2)
+        stft_complex = conv_stft(wav)
+        # stft_real, stft_imag = stft_complex.real, stft_complex.imag
+        stft_mag = torch.abs(stft_complex)
         print(wav.shape, stft_mag.shape)
         plt.imshow(
             torch.log(stft_mag[0] + 1e-6).detach().cpu(), origin="lower", aspect="auto"
@@ -79,8 +84,10 @@ if __name__ == "__main__":
         input_name = ort_session.get_inputs()[0].name
         wav = load_test_wav().unsqueeze(0).numpy()
         ort_output = ort_session.run(None, {input_name: wav})
-        print(ort_output[0].shape, ort_output[1].shape)
-        ort_output_mag = np.sqrt(ort_output[0] ** 2 + ort_output[1] ** 2)
+        print(ort_output[0])
+        ort_output_mag = np.sqrt(
+            ort_output[0][..., 0] ** 2 + ort_output[0][..., 1] ** 2
+        )
         plt.imshow(np.log(ort_output_mag[0] + 1e-6), origin="lower", aspect="auto")
         plt.show()
 
