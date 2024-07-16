@@ -27,7 +27,7 @@ def get_matrix(n_fft):
 
 
 class ConvSTFT(nn.Module):
-    def __init__(self, n_fft, hop_length):
+    def __init__(self, n_fft, hop_length, trainable=False):
         super().__init__()
 
         matrix_real, matrix_imag = get_matrix(n_fft)
@@ -36,13 +36,15 @@ class ConvSTFT(nn.Module):
             1, n_fft // 2 + 1, n_fft, stride=hop_length, padding=n_fft // 2, bias=False
         )
         self.conv_real.weight.data = matrix_real.unsqueeze(1)
-        self.conv_real.requires_grad_(False)
+        if not trainable:
+            self.conv_real.requires_grad_(False)
 
         self.conv_imag = torch.nn.Conv1d(
             1, n_fft // 2 + 1, n_fft, stride=hop_length, padding=n_fft // 2, bias=False
         )
         self.conv_imag.weight.data = matrix_imag.unsqueeze(1)
-        self.conv_imag.requires_grad_(False)
+        if not trainable:
+            self.conv_imag.requires_grad_(False)
 
     def forward(self, x):
         real = self.conv_real(x)
@@ -51,7 +53,7 @@ class ConvSTFT(nn.Module):
 
 
 class ConvISTFT(nn.Module):
-    def __init__(self, n_fft, hop_length):
+    def __init__(self, n_fft, hop_length, trainable=False):
         super().__init__()
 
         self.scale = n_fft / hop_length
@@ -64,13 +66,15 @@ class ConvISTFT(nn.Module):
             n_fft // 2 + 1, 1, n_fft, stride=hop_length, padding=n_fft // 2, bias=False
         )
         self.convtrans_real.weight.data = matrix_inverse_real.unsqueeze(1)
-        self.convtrans_real.requires_grad_(False)
+        if not trainable:
+            self.convtrans_real.requires_grad_(False)
 
         self.convtrans_imag = torch.nn.ConvTranspose1d(
             n_fft // 2 + 1, 1, n_fft, stride=hop_length, padding=n_fft // 2, bias=False
         )
         self.convtrans_imag.weight.data = matrix_inverse_imag.unsqueeze(1)
-        self.convtrans_imag.requires_grad_(False)
+        if not trainable:
+            self.convtrans_imag.requires_grad_(False)
 
     def forward(self, real, imag):
         wav = (self.convtrans_real(real) + self.convtrans_imag(imag)) / self.scale
@@ -160,3 +164,8 @@ if __name__ == "__main__":
         ort_output = ort_session.run(None, input_dict)
 
         print(torch.abs(torch.from_numpy(ort_output[0]) - wav_recon).mean())
+
+    test()
+    test_onnx()
+    test_istft()
+    test_istft_onnx()
