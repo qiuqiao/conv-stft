@@ -43,6 +43,15 @@ class ConvSTFT(nn.Module):
             self.conv_imag.requires_grad_(False)
 
     def forward(self, x):
+        """_summary_
+
+        Args:
+            x (torch.Tensor): (B, 1, T)
+
+        Returns:
+            real (torch.Tensor): (B, n_fft//2 + 1, T//hop_length + 1)
+            imag (torch.Tensor): (B, n_fft//2 + 1, T//hop_length +1)
+        """
         real = self.conv_real(x)
         imag = self.conv_imag(x)
         return real, imag
@@ -73,6 +82,16 @@ class ConvISTFT(nn.Module):
             self.convtrans_imag.requires_grad_(False)
 
     def forward(self, real, imag):
+        """_summary_
+
+        Args:
+            real (torch.Tensor): (B, n_fft//2 + 1, L)
+            imag (torch.Tensor): (B, n_fft//2 + 1, L)
+
+
+        Returns:
+            x (torch.Tensor): (B, 1, (L-1)*hop_length)
+        """
         wav = (self.convtrans_real(real) + self.convtrans_imag(imag)) / self.scale
         return wav
 
