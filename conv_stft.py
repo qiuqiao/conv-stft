@@ -96,6 +96,46 @@ class ConvISTFT(nn.Module):
         return wav
 
 
+class ConvMelSpectrogram(nn.Module):
+    def __init__(
+        self,
+        n_fft,
+        hop_length,
+        n_mels,
+        sample_rate,
+        f_min=40,
+        f_max=None,
+        power=2.0,
+        stft_trainable=False,
+        fbanks_trainable=False,
+        **kwargs
+    ):
+        super().__init__()
+        self.power = power
+        if f_max is None:
+            f_max = sample_rate / 2
+        self.stft = ConvSTFT(n_fft, hop_length, stft_trainable)
+        melscale_fbanks = torchaudio.functional.melscale_fbanks(
+            n_freqs=n_fft // 2 + 1,
+            f_min=f_min,
+            f_max=f_max,
+            n_mels=n_mels,
+            sample_rate=sample_rate,
+            **kwargs
+        )
+        self.conv = nn.Conv1d(n_fft // 2 + 1, n_mels, 1, bias=False)
+        self.conv.weight.data = melscale_fbanks.T.unsqueeze(-1)
+        if not fbanks_trainable:
+            self.conv.requires_grad_(False)
+
+    def forward(self, x):
+        real, imag = self.stft(x)
+        mag = torch.sqrt(real**2 + imag**2)
+        mag = torch.pow(mag, self.power)
+        mel = self.conv(mag)
+        return mel
+
+
 def devisable_padding(x, hop_length):
     if x.shape[-1] % hop_length != 0:
         x = torch.nn.functional.pad(x, (0, hop_length - x.shape[-1] % hop_length))
@@ -184,7 +224,45 @@ if __name__ == "__main__":
 
         print(torch.abs(torch.from_numpy(ort_output[0]) - wav_recon).mean())
 
-    test()
-    test_onnx()
-    test_istft()
-    test_istft_onnx()
+    def test_mel():
+        get_mel = ConvMelSpectrogram(n_fft, hop_length, 64, 16000)
+        wav = load_test_wav().unsqueeze(0)
+        wav = devisable_padding(wav, hop_length)
+
+        mel = get_mel(wav)
+
+        plt.imshow(torch.log(mel[0] + 1e-6), origin="lower", aspect="auto")
+        plt.show()
+
+    def test_mel_onnx():
+        get_mel = ConvMelSpectrogram(n_fft, hop_length, 64, 16000)
+        wav = load_test_wav().unsqueeze(0)
+        wav = devisable_padding(wav, hop_length)
+
+        export_options = torch.onnx.ExportOptions(dynamic_shapes=True)
+        onnx_program = torch.onnx.dynamo_export(
+            get_mel, wav, export_options=export_options
+        )
+        onnx_program.save("model_mel.onnx")
+
+        ort_session = ort.InferenceSession("model_mel.onnx")
+        input_name = ort_session.get_inputs()[0].name
+        (output,) = ort_session.run(None, {input_name: wav.detach().cpu().numpy()})
+
+        print(output.shape)
+        plt.imshow(np.log(output[0] + 1e-6), origin="lower", aspect="auto")
+        plt.show()
+
+    # test()
+    # test_onnx()
+    # test_istft()
+    # test_istft_onnx()
+    # test_mel()
+    # test_mel_onnx()
+
+    # get_mel = torchaudio.transforms.MelSpectrogram()
+    # mel = get_mel(load_test_wav())
+    # print(mel.shape)
+    # plt.imshow(mel[0], origin="lower", aspect="auto")
+    # # plt.imshow(torch.log(mel[0] + 1e-6), origin="lower", aspect="auto")
+    # plt.show()
