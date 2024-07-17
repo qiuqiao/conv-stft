@@ -163,7 +163,9 @@ if __name__ == "__main__":
         stft_mag = torch.abs(stft_complex)
         print(wav.shape, stft_mag.shape)
         plt.imshow(
-            torch.log(stft_mag[0] + 1e-6).detach().cpu(), origin="lower", aspect="auto"
+            torch.log(stft_mag[0] ** 2 + 1e-6).detach().cpu(),
+            origin="lower",
+            aspect="auto",
         )
         plt.show()
 
@@ -183,7 +185,7 @@ if __name__ == "__main__":
         (output_real, output_imaj) = ort_session.run(None, {input_name: wav})
         print(output_real.shape, output_imaj.shape)
         output_mag = np.sqrt(output_real[0] ** 2 + output_imaj[0] ** 2)
-        plt.imshow(np.log(output_mag + 1e-6), origin="lower", aspect="auto")
+        plt.imshow(np.log(output_mag**2 + 1e-6), origin="lower", aspect="auto")
         plt.show()
 
     def test_istft():
@@ -253,8 +255,8 @@ if __name__ == "__main__":
         plt.imshow(np.log(output[0] + 1e-6), origin="lower", aspect="auto")
         plt.show()
 
-    # test()
-    # test_onnx()
+    test()
+    test_onnx()
     # test_istft()
     # test_istft_onnx()
     # test_mel()
