@@ -156,8 +156,8 @@ if __name__ == "__main__":
         return wav
 
     def test():
-        wav = load_test_wav().unsqueeze(0)
-        conv_stft = ConvSTFT(n_fft, hop_length)
+        wav = load_test_wav().unsqueeze(0).to("cuda")
+        conv_stft = ConvSTFT(n_fft, hop_length).to("cuda")
         real, imag = conv_stft(wav)
         stft_complex = torch.complex(real, imag)
         stft_mag = torch.abs(stft_complex)
@@ -187,16 +187,16 @@ if __name__ == "__main__":
         plt.show()
 
     def test_istft():
-        wav = load_test_wav().unsqueeze(0)
+        wav = load_test_wav().unsqueeze(0).to("cuda")
         wav = devisable_padding(wav, hop_length)
-        conv_stft = ConvSTFT(n_fft, hop_length)
+        conv_stft = ConvSTFT(n_fft, hop_length).to("cuda")
         (real, imag) = conv_stft(wav)
 
-        istft = ConvISTFT(n_fft, hop_length)
+        istft = ConvISTFT(n_fft, hop_length).to("cuda")
         wav_recon = istft(real, imag)
 
-        torchaudio.save("recon.wav", wav_recon[0], sample_rate)
-        torchaudio.save("origin.wav", wav[0], sample_rate)
+        torchaudio.save("recon.wav", wav_recon[0].cpu(), sample_rate)
+        torchaudio.save("origin.wav", wav[0].cpu(), sample_rate)
 
         print(torch.abs(wav_recon - wav).mean())
 
@@ -225,13 +225,13 @@ if __name__ == "__main__":
         print(torch.abs(torch.from_numpy(ort_output[0]) - wav_recon).mean())
 
     def test_mel():
-        get_mel = ConvMelSpectrogram(n_fft, hop_length, 64, 16000)
-        wav = load_test_wav().unsqueeze(0)
+        get_mel = ConvMelSpectrogram(n_fft, hop_length, 64, 16000).to("cuda")
+        wav = load_test_wav().unsqueeze(0).to("cuda")
         wav = devisable_padding(wav, hop_length)
 
         mel = get_mel(wav)
 
-        plt.imshow(torch.log(mel[0] + 1e-6), origin="lower", aspect="auto")
+        plt.imshow(torch.log(mel[0].cpu() + 1e-6), origin="lower", aspect="auto")
         plt.show()
 
     def test_mel_onnx():
